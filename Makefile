@@ -188,9 +188,10 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
-
-
-
+	$U/_sleep\
+	$U/_pingpong\
+	$U/_primes\
+	$U/_find\
 
 ifeq ($(LAB),$(filter $(LAB), lock))
 UPROGS += \
@@ -272,7 +273,7 @@ clean:
 	mkfs/mkfs .gdbinit \
         $U/usys.S \
 	$(UPROGS) \
-	lab.zip \
+	*.zip \
 	ph barrier
 
 # try to generate a unique GDB port
