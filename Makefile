@@ -188,7 +188,8 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
-
+	$U/_trace\
+	$U/_sysinfotest\
 
 
 
@@ -272,7 +273,7 @@ clean:
 	mkfs/mkfs .gdbinit \
         $U/usys.S \
 	$(UPROGS) \
-	lab.zip \
+	*.zip \
 	ph barrier
 
 # try to generate a unique GDB port

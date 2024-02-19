@@ -311,7 +311,7 @@ fork(void)
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;
-
+  np->mask = p->mask;	//copy the mask from parent to child
   release(&np->lock);
 
   acquire(&wait_lock);
@@ -685,4 +685,15 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int getnproc(void)
+{
+  int cnt = 0;
+  struct proc *p;
+  for(p = proc; p < &proc[NPROC]; ++ p){
+    if(p->state != UNUSED)
+      ++ cnt;
+  }
+  return cnt;
 }
