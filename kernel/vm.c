@@ -449,3 +449,29 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+void ptprint(pagetable_t pagetable, int dep){
+  int i, j;
+  if(dep == 1){
+    printf("page table %p\n", pagetable);
+  }
+
+  for(i = 0; i < 512; ++ i){
+    pte_t pte = pagetable[i];
+    if(pte & PTE_V){
+      for(j = 0; j < dep; ++ j){
+        printf(" ..");
+      }
+      uint64 pa = PTE2PA(pte);
+      printf("%d: pte %p pa %p\n", i, pte, pa);
+      if(dep < 3)
+        ptprint((pagetable_t)pa, dep + 1);
+    }
+  }
+}
+
+void vmprint(pagetable_t pagetable)
+{
+  ptprint(pagetable, 1);
+  return;
+}
