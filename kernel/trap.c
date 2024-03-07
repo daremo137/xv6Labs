@@ -77,9 +77,19 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2){
+    if(p->alarm_interval > 0){
+      p->alarm_passed ++; //最后一次执行的时间距今
+      if(!p->alarm_state && p->alarm_passed > p->alarm_interval){
+        p->alarm_passed = 0;
+	
+        *p->etpfm = *p->trapframe;
+	p->trapframe->epc = p->alarm_handler; //将返回地址修改成alarm传入的函数地址, 返回用户态以后就会跳转到该地址
+	p->alarm_state = 1;
+      }
+    }
     yield();
-
+  }
   usertrapret();
 }
 
