@@ -8,6 +8,7 @@
 #include "spinlock.h"
 #include "riscv.h"
 #include "defs.h"
+#include "pageref.h"
 
 void freerange(void *pa_start, void *pa_end);
 
@@ -23,10 +24,13 @@ struct {
   struct run *freelist;
 } kmem;
 
+struct spinlock pageref_lock;
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  initlock(&pageref_lock, "pageframe refcnt");
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -51,15 +55,21 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+
+  acquire(&pageref_lock);
+  PAGE_REFCNT(pa) --;
+  if(PAGE_REFCNT(pa) <= 0){
   // Fill with junk to catch dangling refs.
-  memset(pa, 1, PGSIZE);
+    memset(pa, 1, PGSIZE);
+    
+    r = (struct run*)pa;
+    acquire(&kmem.lock);
+    r->next = kmem.freelist;
+    kmem.freelist = r;
+    release(&kmem.lock);
+  }
 
-  r = (struct run*)pa;
-
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+  release(&pageref_lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -76,7 +86,21 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if(r)
+  if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
+    PAGE_REFCNT(r) = 1;
+  }
   return (void*)r;
+}
+
+void pageref_inc(void *pa){
+  acquire(&pageref_lock);
+  PAGE_REFCNT(pa) ++;
+  release(&pageref_lock);
+}
+
+void pageref_dec(void *pa){
+  acquire(&pageref_lock);
+  PAGE_REFCNT(pa) --;
+  release(&pageref_lock);
 }

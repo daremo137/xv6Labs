@@ -315,7 +315,6 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -323,14 +322,26 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
+    
+    *pte &= ~PTE_W;  //等待写入触发异常再分配新页
+    *pte |= PTE_C;  //COW页标志位
+
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    //if((mem = kalloc()) == 0)
+    //  goto err;
+    //memmove(mem, (char*)pa, PGSIZE);
+    //if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+    //  kfree(mem);
+    //  goto err;
+    //}
+    
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){ 
+	    //以i地址开头PGSIZE大小的空间映射到以pa地址开头大小PGSIZE的空间中
+	    //把映射写在new这个页表里，flags是permission
+      //kfree(mem);
       goto err;
     }
+    pageref_inc((void *)pa);
   }
   return 0;
 
@@ -363,8 +374,12 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+
     if(va0 >= MAXVA)
       return -1;
+    if(uncopied_cow(pagetable, va0)){
+      copy_cow(pagetable, va0);
+    }
     pte = walk(pagetable, va0, 0);
     if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0 ||
        (*pte & PTE_W) == 0)
@@ -448,4 +463,39 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+int uncopied_cow(pagetable_t pgtbl, uint64 va){
+  if(va >= MAXVA)
+    return 0;
+  pte_t *pte = walk(pgtbl, va, 0);
+
+  if((*pte & (PTE_V | PTE_U)) == 0){
+    return 0;
+  }
+  return *pte & PTE_C;
+}
+
+int copy_cow(pagetable_t pgtbl, uint64 va){
+  if(va >= MAXVA)
+    return -1;
+  pte_t *pte;
+  if((pte = walk(pgtbl, va, 0)) == 0)
+    return -1;
+  uint64 pre_pa = PTE2PA(*pte);
+  uint64 perm = PTE_FLAGS(*pte); //get the permission of pte
+  uint64 newpage = (uint64)kalloc();
+  if(newpage == 0)
+    return -1;
+  uint64 va_addr = PGROUNDDOWN(va); //the addr of page frame in stack
+  perm &= ~PTE_C; //erase PTE_C
+  perm |= PTE_W;  //can be written
+  memmove((void *)newpage, (void *)pre_pa, PGSIZE);
+  uvmunmap(pgtbl, va_addr, 1, 1);
+  
+  if(mappages(pgtbl, va_addr, PGSIZE, newpage, perm) < 0){
+    kfree((void *)newpage);
+    return -1;
+  }
+  return 0;
 }
