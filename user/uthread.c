@@ -10,10 +10,27 @@
 #define STACK_SIZE  8192
 #define MAX_THREAD  4
 
+struct context {
+  /*  40 */ uint64 ra;
+  /*  48 */ uint64 sp;
+  /*  96 */ uint64 s0;
+  /* 104 */ uint64 s1;
+  /* 176 */ uint64 s2;
+  /* 184 */ uint64 s3;
+  /* 192 */ uint64 s4;
+  /* 200 */ uint64 s5;
+  /* 208 */ uint64 s6;
+  /* 216 */ uint64 s7;
+  /* 224 */ uint64 s8;
+  /* 232 */ uint64 s9;
+  /* 240 */ uint64 s10;
+  /* 248 */ uint64 s11;
+};
 
 struct thread {
   char       stack[STACK_SIZE]; /* the thread's stack */
   int        state;             /* FREE, RUNNING, RUNNABLE */
+  struct context ctx;
 };
 struct thread all_thread[MAX_THREAD];
 struct thread *current_thread;
@@ -60,6 +77,7 @@ thread_schedule(void)
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
      */
+    thread_switch((uint64)&t->ctx, (uint64)&next_thread->ctx);
   } else
     next_thread = 0;
 }
@@ -73,6 +91,8 @@ thread_create(void (*func)())
     if (t->state == FREE) break;
   }
   t->state = RUNNABLE;
+  t->ctx.ra = (uint64)func;
+  t->ctx.sp = (uint64)&t->stack + STACK_SIZE - 1;	//每个线程都有自己独立的栈
   // YOUR CODE HERE
 }
 
